@@ -6,57 +6,115 @@ This project implements an **Agentic AI solution** using **LangGraph** and **Lan
 1. **Gherkin Feature Files** from Business Requirements Documents (BRD)
 2. **Selenium WebDriver Tests** in Java from the generated feature files
 
+**Two Interfaces Available:**
+- **CLI**: Command-line interface for automation/CI-CD
+- **Web UI**: FastAPI-based browser interface with file upload
+
 ## 🏗️ Architecture
 
 ### Agentic System Design
 
-The system uses **two specialized agents** orchestrated by **LangGraph**:
+The system uses **two specialized agents** orchestrated by **LangGraph StateGraph**:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    LangGraph Workflow                    │
-│                                                          │
-│  ┌────────────┐       ┌──────────────┐                 │
-│  │    BRD     │──────>│ Feature Agent│─────┐            │
-│  │   Input    │       │              │     │            │
-│  └────────────┘       └──────────────┘     │            │
-│                              │              │            │
-│                              │              v            │
-│                              │      ┌──────────────┐    │
-│                              │      │   Feature    │    │
-│                              │      │    File      │    │
-│                              │      └──────────────┘    │
-│                              │              │            │
-│                              │              v            │
-│                              │      ┌──────────────┐    │
-│                              └─────>│   Selenium   │    │
-│                                     │    Agent     │    │
-│                                     └──────────────┘    │
-│                                            │             │
-│                                            v             │
-│                                     ┌──────────────┐    │
-│                                     │  Java Tests  │    │
-│                                     └──────────────┘    │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     LangGraph StateGraph Workflow                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  ┌─────────────┐                                                    │
+│  │   BRD/JIRA  │                                                    │
+│  │   Document  │                                                    │
+│  │ (.txt/.docx │                                                    │
+│  │    /.pdf)   │                                                    │
+│  └──────┬──────┘                                                    │
+│         │                                                            │
+│         v                                                            │
+│  ┌─────────────────────────────────────────────┐                   │
+│  │         Workflow Node: Feature Generation    │                   │
+│  ├─────────────────────────────────────────────┤                   │
+│  │  • Invokes Feature Agent                    │                   │
+│  │  • Agent: langchain.agents.create_agent     │                   │
+│  │  • System Prompt: QA/BDD Expert             │                   │
+│  │  • LLM Backend: Ollama (qwen2.5)            │                   │
+│  └───────────────────┬─────────────────────────┘                   │
+│                      │                                               │
+│                      v                                               │
+│              ┌───────────────┐                                      │
+│              │  AgentState   │                                      │
+│              │ {feature_file}│                                      │
+│              └───────┬───────┘                                      │
+│                      │                                               │
+│                      v                                               │
+│  ┌─────────────────────────────────────────────┐                   │
+│  │       Workflow Node: Test Generation         │                   │
+│  ├─────────────────────────────────────────────┤                   │
+│  │  • Invokes Selenium Agent                   │                   │
+│  │  • Agent: langchain.agents.create_agent     │                   │
+│  │  • System Prompt: Selenium/Java Expert      │                   │
+│  │  • LLM Backend: Ollama (qwen2.5)            │                   │
+│  └───────────────────┬─────────────────────────┘                   │
+│                      │                                               │
+│                      v                                               │
+│              ┌───────────────┐                                      │
+│              │  AgentState   │                                      │
+│              │{selenium_test}│                                      │
+│              └───────┬───────┘                                      │
+│                      │                                               │
+│                      v                                               │
+│              ┌───────────────┐                                      │
+│              │  Save Files   │                                      │
+│              │   • .feature  │                                      │
+│              │   • .java     │                                      │
+│              └───────────────┘                                      │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+        ┌──────────────────────────────────────────┐
+        │      Technical Implementation Details      │
+        ├──────────────────────────────────────────┤
+        │  • LangGraph: StateGraph orchestration   │
+        │  • LangChain: create_agent() for agents  │
+        │  • Ollama: Local LLM inference           │
+        │  • State: Immutable dict passed between  │
+        │           nodes with agent outputs       │
+        │  • No Tool Calling: Direct prompting     │
+        │                     (Ollama limitation)  │
+        └──────────────────────────────────────────┘
 ```
+
+**Key Components:**
+
+1. **LangGraph StateGraph**: Manages workflow execution and state transitions
+2. **Agent Nodes**: Workflow nodes that invoke LangChain agents
+3. **Agent State**: Shared state dict containing BRD text, feature file, and test code
+4. **System Prompts**: Pre-configured prompts defining agent expertise
+5. **Ollama Backend**: Local LLM (qwen2.5) for agent inference
 
 ### Agent Descriptions
 
 #### 1. **Feature Agent** 🎯
 - **Responsibility**: Convert BRD into Gherkin feature files
-- **Tools**:
-  - `AnalyzeBRD`: Extracts requirements and user stories
-  - `GenerateGherkinScenarios`: Creates Gherkin scenarios
-  - `ValidateFeature`: Validates syntax and completeness
+- **Created with**: `langchain.agents.create_agent` (official LangChain API)
+- **System Prompt**: Expert QA analyst specializing in BDD/Gherkin
 - **Output**: Properly structured `.feature` files with Given/When/Then steps
+- **Features**:
+  - Analyzes requirements and user stories
+  - Generates multiple scenarios with Given/When/Then steps
+  - Includes negative test cases
+  - Validates Gherkin syntax
 
 #### 2. **Selenium Agent** 🤖
 - **Responsibility**: Generate Selenium WebDriver automation tests
-- **Tools**:
-  - `DesignPageObjects`: Creates Page Object Model structure
-  - `GenerateTestMethods`: Generates JUnit 5 test methods
-  - `AddSeleniumSetup`: Adds WebDriver setup/teardown
+- **Created with**: `langchain.agents.create_agent` (official LangChain API)
+- **System Prompt**: Expert QA automation engineer specializing in Selenium/Java
 - **Output**: Production-ready Java test classes using Selenium WebDriver
+- **Features**:
+  - Designs Page Object Model structure
+  - Generates JUnit 5 test methods with assertions
+  - Adds WebDriver setup/teardown
+  - Produces clean, production-ready code
+
+**Note**: Agents use direct prompting (Ollama doesn't support native tool calling)
 
 ## 📦 Installation
 
@@ -71,13 +129,42 @@ The system uses **two specialized agents** orchestrated by **LangGraph**:
 # Install dependencies
 pip install -r requirements.txt
 
+# Dependencies include:
+# - langchain, langgraph (agentic framework)
+# - fastapi, uvicorn (web server)
+# - python-docx, PyPDF2 (document processing)
+# - requests (Ollama API client)
+
 # Verify Ollama is running
 curl http://localhost:11434/api/tags
+
+# Pull required models (if not already available)
+ollama pull qwen2.5:latest
+ollama pull qwen2.5:7b
 ```
 
 ## 🎮 Usage
 
-### Usage Examples
+### Option 1: Web UI (Recommended for Manual Testing)
+
+```bash
+# Start the FastAPI server
+python app.py
+
+# Open browser to http://localhost:8000
+# Upload BRD file (.txt, .docx, .pdf)
+# Configure options and generate tests
+# Download generated files
+```
+
+**Web UI Features:**
+- Drag & drop file upload
+- Real-time generation status
+- In-browser preview of generated files
+- Direct download buttons
+- Support for .txt, .docx, and .pdf formats
+
+### Option 2: CLI (Recommended for Automation/CI-CD)
 
 ```bash
 # Standard sequential workflow
@@ -88,6 +175,9 @@ python main.py --brd data/brd_sample.txt --base-name MyFeature --use-strong-mode
 
 # Enhanced workflow with review steps
 python main.py --brd data/brd_sample.txt --base-name MyFeature --workflow parallel
+
+# Example with JIRA story
+python main.py --brd data/jira_story_sample.txt --base-name UserLogin --use-strong-model
 ```
 
 ## 🔧 Configuration
@@ -113,21 +203,27 @@ OUTPUT_TEST_DIR=outputs/tests
 ```
 AI-Automation/
 ├── main.py                  # CLI entry point
+├── app.py                   # FastAPI web application ⭐
 ├── requirements.txt         # Python dependencies
 ├── README.md                # This file
 ├── ai_automation/
 │   ├── __init__.py
 │   ├── config.py            # Configuration management
-│   ├── prompts.py           # Prompt templates
-│   ├── ollama_client.py     # Ollama API client
-│   ├── generator.py         # Output utilities
-│   ├── agents.py            # LangChain agent definitions ⭐
+│   ├── prompts.py           # System prompt templates
+│   ├── ollama_client.py     # Ollama API client (with logging)
+│   ├── generator.py         # Output file utilities
+│   ├── agents.py            # LangChain agent creation ⭐
 │   └── workflow.py          # LangGraph workflow orchestration ⭐
+├── static/
+│   └── index.html           # Web UI frontend
 ├── data/
-│   └── brd_sample.txt       # Sample BRD input
-└── outputs/
-    ├── features/            # Generated .feature files
-    └── tests/              # Generated Java test files
+│   ├── brd_sample.txt       # Sample BRD
+│   ├── jira_story_sample.txt # Sample JIRA story
+│   └── jira_story_cart.txt  # Sample shopping cart story
+├── outputs/
+│   ├── features/            # Generated .feature files
+│   └── tests/              # Generated Java test files
+└── temp/                    # Temporary upload directory
 ```
 
 ## 🌟 Key Features
@@ -135,10 +231,20 @@ AI-Automation/
 ### Agentic Implementation
 
 1. **LangGraph Orchestration**: State-based workflow management
-2. **Specialized Agents**: Separate agents for feature and test generation
-3. **Tool-based Architecture**: Each agent has specialized tools
-4. **ReAct Pattern**: Agents use Thought-Action-Observation loops
+2. **Official LangChain Agents**: Uses `langchain.agents.create_agent` (not deprecated APIs)
+3. **Specialized Agent Roles**: Separate agents for feature and test generation
+4. **System Prompt-Based**: Agents guided by detailed system prompts
 5. **State Management**: Shared state across workflow nodes
+6. **Automatic Cleanup**: Removes markdown code fences from LLM output
+
+### Additional Features
+
+- **LLM Call Logging**: Tracks Ollama API calls with prompt/response sizes
+- **Multiple Input Formats**: Supports .txt, .docx, and .pdf files
+- **Dual Interface**: Web UI for manual use, CLI for automation
+- **Configurable Models**: Choose between default and strong models
+- **Validation Steps**: Optional parallel workflow with review nodes
+- **Production Ready**: Clean output without markdown artifacts
 
 ### Workflow Types
 
@@ -181,30 +287,39 @@ public void testSuccessfulAccountOpening() {
 
 ## 🛠️ Technology Stack
 
-- **LangChain**: Agent framework and LLM integration
+**Backend:**
+- **LangChain**: Agent framework and LLM integration (`langchain.agents.create_agent`)
 - **LangGraph**: Workflow orchestration and state management
-- **Ollama**: Local LLM inference
-- **Python**: Core language
+- **FastAPI**: Web API framework
+- **Uvicorn**: ASGI server
+- **Ollama**: Local LLM inference (qwen2.5 models)
+- **Python 3.8+**: Core language
+
+**Output Frameworks:**
 - **Gherkin/BDD**: Feature file format
-- **Selenium WebDriver**: Test automation framework
-- **JUnit 5**: Java testing framework
+- **Selenium WebDriver**: Generated test automation framework
+- **JUnit 5**: Generated Java testing framework
+
+**Document Processing:**
+- **python-docx**: Word document reading
+- **PyPDF2**: PDF document reading
 
 ## 🚧 Advanced Usage
 
-### Custom Agents
+### Custom System Prompts
 
-You can extend the agents by adding more tools:
+You can customize agent behavior by modifying system prompts in `ai_automation/agents.py`:
 
 ```python
-from langchain.tools import Tool
-
-new_tool = Tool(
-    name="CustomTool",
-    func=your_function,
-    description="Description of what the tool does"
-)
-
-feature_agent.tools.append(new_tool)
+def create_feature_agent(use_strong_model: bool = True):
+    system_prompt = """Your custom prompt here..."""
+    
+    agent = create_agent(
+        model=llm,
+        tools=None,
+        system_prompt=system_prompt
+    )
+    return agent
 ```
 
 ### Custom Workflows
@@ -226,25 +341,110 @@ compiled_workflow = workflow.compile()
 
 The agentic workflow follows this execution pattern:
 
-1. **Initialize State**: Load BRD text
-2. **Feature Agent Execution**:
-   - Analyze BRD requirements
-   - Generate Gherkin scenarios
-   - Validate feature file
-3. **State Transfer**: Pass feature to next agent
-4. **Selenium Agent Execution**:
-   - Design Page Objects
-   - Generate test methods
-   - Add Selenium setup
-5. **Output**: Save both feature and test files
+### Standard Workflow Execution Flow:
+
+```
+1. User Input (CLI or Web UI)
+   ↓
+2. Initialize AgentState
+   {
+     "brd_text": "User story content...",
+     "feature_file": "",
+     "selenium_test": "",
+     "current_step": "start",
+     "messages": []
+   }
+   ↓
+3. LangGraph StateGraph.invoke(initial_state)
+   ↓
+4. Node 1: _generate_feature_node()
+   • Creates agent: feature_agent = create_agent(llm, system_prompt=QA_EXPERT)
+   • Invokes agent: result = feature_agent.invoke({"messages": [{"role": "user", "content": brd_text}]})
+   • Agent calls Ollama LLM via HTTP POST
+   • Ollama generates Gherkin feature file
+   • Cleans markdown code fences
+   • Updates state: state["feature_file"] = cleaned_output
+   ↓
+5. LangGraph passes updated state to next node
+   ↓
+6. Node 2: _generate_selenium_node()
+   • Creates agent: selenium_agent = create_agent(llm, system_prompt=SELENIUM_EXPERT)
+   • Invokes agent: result = selenium_agent.invoke({"messages": [{"role": "user", "content": feature_file}]})
+   • Agent calls Ollama LLM via HTTP POST
+   • Ollama generates Java Selenium test
+   • Cleans markdown code fences
+   • Updates state: state["selenium_test"] = cleaned_output
+   ↓
+7. LangGraph reaches END node
+   ↓
+8. Return final state to caller
+   ↓
+9. Save files to outputs/ directory
+   • outputs/features/{base_name}.feature
+   • outputs/tests/{base_name}Test.java
+```
+
+### Parallel Workflow (with validation):
+
+Adds review nodes between generation steps:
+```
+Feature Generation → Feature Validation → Selenium Generation → Test Validation
+```
+
+**Validation checks:**
+- Feature files: Verifies "Feature:" and "Scenario:" keywords exist
+- Test files: Structural validation of generated code
+
+### Key Implementation Details:
+
+1. **Agent Creation**: Agents are instantiated when workflow is initialized
+2. **Agent Invocation**: Each workflow node invokes its agent with current state
+3. **LLM Calls**: 2 HTTP calls to Ollama (one per agent)
+4. **State Immutability**: Each node returns new state dict (functional pattern)
+5. **Cleanup**: Markdown code fences removed from LLM output
+6. **Logging**: All LLM calls logged with prompt/response sizes
 
 ## 🤝 Contributing
 
 To add new capabilities:
 
-1. Define new tools in `agents.py`
+1. Define new agents in `agents.py` using `create_agent()`
 2. Update workflow in `workflow.py`
-3. Add prompts in `prompts.py`
+3. Modify system prompts in `agents.py`
+4. For web UI: Update `app.py` and `static/index.html`
+
+## 🐛 Troubleshooting
+
+**Ollama not responding:**
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Start Ollama (if not running)
+ollama serve
+```
+
+**Port 8000 already in use:**
+```bash
+# Find and kill process using port 8000
+# Windows:
+netstat -ano | findstr :8000
+taskkill /PID <process_id> /F
+
+# Linux/Mac:
+lsof -ti:8000 | xargs kill -9
+```
+
+**Import errors:**
+```bash
+# Reinstall dependencies
+pip install -r requirements.txt --upgrade
+```
+
+**LLM not generating properly:**
+- Check Ollama is running and models are downloaded
+- Increase timeout in `config.py` (default: 120s)
+- Try using `--use-strong-model` flag for better quality
 
 ## 📝 License
 
@@ -254,10 +454,12 @@ MIT License
 
 - [LangChain Documentation](https://python.langchain.com/)
 - [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Ollama](https://ollama.ai/)
 - [Selenium WebDriver](https://www.selenium.dev/)
 - [Gherkin Reference](https://cucumber.io/docs/gherkin/)
+- [JUnit 5](https://junit.org/junit5/)
 
 ---
 
-**Built with ❤️ using LangGraph and LangChain**
+**Built with ❤️ using LangGraph, LangChain, and FastAPI**
