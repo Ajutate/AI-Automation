@@ -1,0 +1,19 @@
+requests
+python-dotenv
+pydantic
+langchain
+langchain-community
+langgraph
+langchain-core
+
+# FastAPI Web Application
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Document Processing
+python-docx
+PyPDF2
+streamlit
+python-docx
+PyPDF2

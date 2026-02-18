@@ -1,0 +1,59 @@
+JIRA Story: US-1234
+Title: User Registration and Login for E-Commerce Platform
+
+Story Type: User Story
+Priority: High
+Story Points: 8
+
+As a new customer
+I want to register an account and login to the e-commerce platform
+So that I can save my shopping preferences and track my orders
+
+Description:
+The e-commerce platform needs a secure user registration and authentication system. Users should be able to create new accounts with email verification, login with their credentials, and manage their sessions securely. The system should support password reset functionality and remember user preferences.
+
+Acceptance Criteria:
+1. User can register with email, password, first name, and last name
+2. Email validation is performed (valid format and unique)
+3. Password must be at least 8 characters with 1 uppercase, 1 lowercase, and 1 number
+4. User receives verification email after registration
+5. User can login with verified email and password
+6. Invalid login attempts show appropriate error messages
+7. User can request password reset via email
+8. User session persists for 24 hours or until logout
+9. Login page displays "Remember Me" checkbox for extended sessions
+10. System logs all authentication events for security audit
+
+Technical Requirements:
+- Use OAuth 2.0 for authentication
+- Implement JWT tokens for session management
+- Password encryption using bcrypt
+- Email service integration for verification and reset
+- Rate limiting on login attempts (max 5 attempts per 15 minutes)
+- HTTPS required for all authentication endpoints
+
+Business Rules:
+- Users under 18 cannot register without parental consent
+- Email verification must be completed within 48 hours
+- Failed login attempts after 5 tries lock account for 15 minutes
+- Password cannot be same as last 3 passwords
+
+Dependencies:
+- Email service provider setup
+- SSL certificate configuration
+- Database schema for user management
+
+Out of Scope:
+- Social media login integration (separate story)
+- Two-factor authentication (future enhancement)
+- Biometric authentication
+
+Notes:
+- Consider GDPR compliance for user data
+- Accessibility standards (WCAG 2.1) must be met
+- Support for mobile responsive design
+
+Linked Issues:
+- US-1235: User Profile Management
+- US-1236: Password Security Enhancements
+- BUG-789: Login page timeout issue

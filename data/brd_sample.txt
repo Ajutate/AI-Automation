@@ -1,0 +1,39 @@
+BRD: Online Account Opening (Retail Banking)
+
+Business Goal:
+Enable customers to open a retail savings account online within 10 minutes.
+
+Scope:
+- Web channel only
+- New-to-bank customers
+- Savings account product
+
+Actors:
+- Customer
+- Bank KYC Service
+- Core Banking System
+
+High-Level Flow:
+1. Customer starts account opening and provides personal details (name, DOB, address, phone, email).
+2. Customer uploads ID proof and address proof.
+3. System performs KYC verification.
+4. If KYC is successful, customer selects account type and submits application.
+5. System creates account in core banking and displays account number.
+6. Customer receives confirmation email and SMS.
+
+Business Rules:
+- Applicant must be 18+ years old.
+- KYC must be successful to proceed.
+- If KYC fails, show error and allow retry once.
+- If second KYC attempt fails, application is rejected.
+- Email and phone are mandatory.
+- OTP must be verified for phone.
+
+Non-Functional Requirements:
+- Each step should complete within 3 seconds.
+- PII should be masked in logs.
+
+Edge Cases:
+- OTP mismatch.
+- KYC service timeout.
+- Duplicate application for same ID.
