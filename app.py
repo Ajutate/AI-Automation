@@ -11,7 +11,7 @@ import uvicorn
 from docx import Document
 import PyPDF2
 
-from ai_automation.workflow import AutomationWorkflow, ParallelAgentWorkflow
+from ai_automation.workflow import AutomationWorkflow, ValidatedWorkflow
 from ai_automation.config import Config
 
 
@@ -82,7 +82,7 @@ async def generate_tests(
         
         # Initialize workflow
         if use_parallel:
-            workflow = ParallelAgentWorkflow(use_strong_model=use_strong_model)
+            workflow = ValidatedWorkflow(use_strong_model=use_strong_model)
         else:
             workflow = AutomationWorkflow(use_strong_model=use_strong_model)
         

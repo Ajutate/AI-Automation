@@ -4,7 +4,7 @@ Example usage of the AI Automation system.
 This script demonstrates how to use the workflow programmatically.
 """
 
-from ai_automation.workflow import AutomationWorkflow, ParallelAgentWorkflow
+from ai_automation.workflow import AutomationWorkflow, ValidatedWorkflow
 from ai_automation.generator import save_outputs
 
 
@@ -45,8 +45,8 @@ def example_basic_workflow():
     print(f"   Java: {java_path}")
 
 
-def example_parallel_workflow():
-    """Example: Parallel workflow with review steps."""
+def example_validated_workflow():
+    """Example: Validated workflow with quality review steps."""
     print("\n" + "=" * 60)
     print("Example 2: Enhanced Workflow with Reviews")
     print("=" * 60)
@@ -65,7 +65,7 @@ def example_parallel_workflow():
     6. Save cart for later
     """
     
-    workflow = ParallelAgentWorkflow(use_strong_model=True)
+    workflow = ValidatedWorkflow(use_strong_model=True)
     results = workflow.execute(brd_text)
     
     feature_path, java_path = save_outputs(
@@ -154,7 +154,7 @@ if __name__ == "__main__":
     # Run examples
     try:
         example_basic_workflow()
-        example_parallel_workflow()
+        example_validated_workflow()
         example_custom_usage()
         example_workflow_state_inspection()
         

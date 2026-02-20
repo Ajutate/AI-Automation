@@ -141,8 +141,8 @@ class AutomationWorkflow:
         }
 
 
-class ParallelAgentWorkflow:
-    """Alternative workflow with parallel agent execution and review.
+class ValidatedWorkflow:
+    """Enhanced workflow with validation steps after each generation phase.
     
     Uses LangChain agents properly with validation steps between generation phases.
     Agents are invoked through the workflow, not bypassed with direct prompting.

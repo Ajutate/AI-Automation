@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from ai_automation.workflow import AutomationWorkflow, ParallelAgentWorkflow
+from ai_automation.workflow import AutomationWorkflow, ValidatedWorkflow
 from ai_automation.generator import save_outputs
 
 
@@ -38,7 +38,7 @@ def main() -> None:
 
     # Select and execute workflow
     if args.workflow == "parallel":
-        workflow = ParallelAgentWorkflow(use_strong_model=args.use_strong_model)
+        workflow = ValidatedWorkflow(use_strong_model=args.use_strong_model)
     else:
         workflow = AutomationWorkflow(use_strong_model=args.use_strong_model)
     

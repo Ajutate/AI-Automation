@@ -243,7 +243,7 @@ AI-Automation/
 - **Multiple Input Formats**: Supports .txt, .docx, and .pdf files
 - **Dual Interface**: Web UI for manual use, CLI for automation
 - **Configurable Models**: Choose between default and strong models
-- **Validation Steps**: Optional parallel workflow with review nodes
+- **Validation Steps**: Optional validated workflow with quality review nodes
 - **Production Ready**: Clean output without markdown artifacts
 
 ### Workflow Types
@@ -253,10 +253,11 @@ AI-Automation/
 BRD → Feature Agent → Feature File → Selenium Agent → Java Tests
 ```
 
-#### Parallel Workflow (with Reviews)
+#### Validated Workflow (with Quality Checks)
 ```
 BRD → Feature Agent → Feature Review → Selenium Agent → Test Review → Java Tests
 ```
+Note: Both workflows execute sequentially (not parallel)
 
 ## 🔍 Example Output
 
@@ -384,9 +385,9 @@ The agentic workflow follows this execution pattern:
    • outputs/tests/{base_name}Test.java
 ```
 
-### Parallel Workflow (with validation):
+### Validated Workflow (with quality checks):
 
-Adds review nodes between generation steps:
+Adds review nodes between generation steps (sequential execution):
 ```
 Feature Generation → Feature Validation → Selenium Generation → Test Validation
 ```
@@ -394,6 +395,8 @@ Feature Generation → Feature Validation → Selenium Generation → Test Valid
 **Validation checks:**
 - Feature files: Verifies "Feature:" and "Scenario:" keywords exist
 - Test files: Structural validation of generated code
+
+**Note**: Despite the `--workflow parallel` flag name, execution is sequential with validation steps between agents.
 
 ### Key Implementation Details:
 

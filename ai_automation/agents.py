@@ -13,7 +13,6 @@ from pydantic import Field
 
 from .ollama_client import generate_text
 from .config import Config
-from .prompts import FEATURE_PROMPT, JAVA_TEST_PROMPT
 
 
 class OllamaLLM(LLM):
