@@ -11,7 +11,7 @@ import uvicorn
 from docx import Document
 import PyPDF2
 
-from ai_automation.workflow import AutomationWorkflow, ValidatedWorkflow
+from ai_automation.workflow import AutomationWorkflow
 from ai_automation.config import Config
 
 
@@ -64,8 +64,7 @@ async def root():
 async def generate_tests(
     file: UploadFile = File(...),
     base_name: str = Form(...),
-    use_strong_model: bool = Form(False),
-    use_parallel: bool = Form(False)
+    use_strong_model: bool = Form(False)
 ):
     """Generate feature and test files from uploaded BRD"""
     try:
@@ -80,35 +79,38 @@ async def generate_tests(
         # Read BRD content
         brd_content = read_document(file_path)
         
-        # Initialize workflow
-        if use_parallel:
-            workflow = ValidatedWorkflow(use_strong_model=use_strong_model)
-        else:
-            workflow = AutomationWorkflow(use_strong_model=use_strong_model)
+        # Initialize workflow with tool validation
+        workflow = AutomationWorkflow(use_strong_model=use_strong_model)
         
         # Run workflow
         result = workflow.execute(brd_content)
         
         # Save outputs
         from ai_automation.generator import save_outputs
-        feature_path, test_path = save_outputs(
+        feature_path, step_def_path, runner_path = save_outputs(
             result["feature_file"],
-            result["selenium_test"],
-            base_name
+            result.get("step_definitions", result.get("selenium_test", "")),
+            base_name,
+            result.get("runner_class", None)
         )
         
         # Clean up temp file
         os.remove(file_path)
         
+        response_files = {
+            "feature": feature_path,
+            "step_definitions": step_def_path
+        }
+        if runner_path:
+            response_files["runner"] = runner_path
+        
         return JSONResponse({
             "status": "success",
             "message": "Files generated successfully",
-            "files": {
-                "feature": feature_path,
-                "test": test_path
-            },
+            "files": response_files,
             "feature_content": result["feature_file"],
-            "test_content": result["selenium_test"]
+            "test_content": result.get("step_definitions", result.get("selenium_test", "")),
+            "runner_content": result.get("runner_class", "")
         })
         
     except Exception as e:

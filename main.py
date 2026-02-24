@@ -3,7 +3,7 @@
 import argparse
 from pathlib import Path
 
-from ai_automation.workflow import AutomationWorkflow, ValidatedWorkflow
+from ai_automation.workflow import AutomationWorkflow
 from ai_automation.generator import save_outputs
 
 
@@ -23,12 +23,6 @@ def main() -> None:
     parser.add_argument("--brd", required=True, help="Path to BRD text file")
     parser.add_argument("--base-name", default="GeneratedFeature", help="Base name for output files")
     parser.add_argument("--use-strong-model", action="store_true", help="Use stronger model for generation")
-    parser.add_argument(
-        "--workflow",
-        choices=["standard", "parallel"],
-        default="standard",
-        help="Workflow type: 'standard' for sequential agents, 'parallel' for enhanced workflow with review steps"
-    )
     args = parser.parse_args()
 
     # Read BRD
@@ -36,28 +30,26 @@ def main() -> None:
     brd_text = read_brd(args.brd)
     print(f"✓ BRD loaded ({len(brd_text)} characters)")
 
-    # Select and execute workflow
-    if args.workflow == "parallel":
-        workflow = ValidatedWorkflow(use_strong_model=args.use_strong_model)
-    else:
-        workflow = AutomationWorkflow(use_strong_model=args.use_strong_model)
-    
-    # Execute agentic workflow
+    # Execute workflow with tool validation
+    workflow = AutomationWorkflow(use_strong_model=args.use_strong_model)
     results = workflow.execute(brd_text)
 
     # Save outputs
     print(f"\n💾 Saving generated files as '{args.base_name}'...")
-    feature_path, java_path = save_outputs(
+    feature_path, step_def_path, runner_path = save_outputs(
         results["feature_file"],
-        results["selenium_test"],
-        args.base_name
+        results.get("step_definitions", results.get("selenium_test", "")),
+        args.base_name,
+        results.get("runner_class", None)
     )
 
     # Display results
     print("\n" + "=" * 60)
     print("📦 Generated Files:")
     print(f"   • Feature: {feature_path}")
-    print(f"   • Java Test: {java_path}")
+    print(f"   • Step Definitions: {step_def_path}")
+    if runner_path:
+        print(f"   • Test Runner: {runner_path}")
     print("=" * 60)
     print("\n✨ Generation complete!\n")
 

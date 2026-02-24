@@ -1,7 +1,7 @@
-"""LangGraph workflow for orchestrating Feature and Selenium agents.
+"""LangGraph workflow for orchestrating Feature and Selenium agents with tool-based validation.
 
-This uses LangChain's official create_agent to create proper agents,
-then orchestrates them in a StateGraph workflow.
+This workflow uses LangChain's official create_agent to create proper agents,
+then orchestrates them in a StateGraph workflow with ACTUAL code validation using executable tools.
 """
 
 from typing import TypedDict, Annotated
@@ -9,240 +9,237 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 
 from .agents import create_feature_agent, create_selenium_agent
+from .tools import compile_java_code, validate_feature_syntax, check_java_dependencies, analyze_code_quality
 
 
 class AgentState(TypedDict):
     """State shared across agents in the workflow."""
     brd_text: str
     feature_file: str
-    selenium_test: str
+    step_definitions: str  # Cucumber step definitions
+    runner_class: str  # Cucumber test runner
+    selenium_test: str  # Legacy field for compatibility
     current_step: str
     messages: Annotated[list, add_messages]
+    validation_results: dict  # Store validation results
 
 
 class AutomationWorkflow:
-    """LangGraph workflow orchestrating Feature and Selenium agents.
+    """Production workflow with tool-enabled validation.
     
-    Uses LangChain's official create_agent and invokes them properly.
-    Agents are created with system prompts and invoked via the LangGraph workflow.
+    This workflow uses a validation agent that can actually execute tools to:
+    - Compile Java code with javac
+    - Validate Gherkin syntax
+    - Check dependencies
+    - Analyze code quality
+    
+    This makes it a truly autonomous system that validates its own outputs.
     """
     
     def __init__(self, use_strong_model: bool = True):
-        # Create agents using official LangChain create_agent
+        # Create generation agents
         self.feature_agent, self.feature_model = create_feature_agent(use_strong_model=use_strong_model)
         self.selenium_agent, self.selenium_model = create_selenium_agent(use_strong_model=use_strong_model)
-        self.workflow = self._build_workflow()
-    
-    def _generate_feature_node(self, state: AgentState) -> AgentState:
-        """Agent node: Generate feature file from BRD."""
-        print("\n🤖 Feature Agent: Analyzing BRD and generating feature file...")
         
-        # Invoke the LangChain agent
-        result = self.feature_agent.invoke({"messages": [{"role": "user", "content": state['brd_text']}]})
-        
-        # Extract the final message content
-        if result.get('messages'):
-            feature_file = result['messages'][-1].content
-        else:
-            feature_file = str(result)
-        
-        # Clean up markdown code fences
-        feature_file = feature_file.replace('```gherkin', '').replace('```', '').strip()
-        
-        return {
-            **state,
-            "feature_file": feature_file,
-            "current_step": "feature_generated",
-            "messages": [{"role": "system", "content": "Feature file generated"}]
-        }
-    
-    def _generate_selenium_node(self, state: AgentState) -> AgentState:
-        """Agent node: Generate Selenium test from feature file."""
-        print("\n🤖 Selenium Agent: Creating automation test from feature file...")
-        
-        # Invoke the LangChain agent
-        result = self.selenium_agent.invoke({"messages": [{"role": "user", "content": state['feature_file']}]})
-        
-        # Extract the final message content
-        if result.get('messages'):
-            selenium_test = result['messages'][-1].content
-        else:
-            selenium_test = str(result)
-        
-        # Clean up markdown code fences
-        selenium_test = selenium_test.replace('```java', '').replace('```', '').strip()
-        
-        return {
-            **state,
-            "selenium_test": selenium_test,
-            "current_step": "automation_generated",
-            "messages": [{"role": "system", "content": "Selenium test generated"}]
-        }
-    
-    def _should_continue(self, state: AgentState) -> str:
-        """Conditional edge: Determine next step in workflow."""
-        current_step = state.get("current_step", "start")
-        
-        if current_step == "start":
-            return "generate_feature"
-        elif current_step == "feature_generated":
-            return "generate_selenium"
-        elif current_step == "automation_generated":
-            return "end"
-        else:
-            return "end"
-    
-    def _build_workflow(self) -> StateGraph:
-        """Build the LangGraph workflow."""
-        # Create the graph
-        workflow = StateGraph(AgentState)
-        
-        # Add nodes representing each agent's task
-        workflow.add_node("generate_feature", self._generate_feature_node)
-        workflow.add_node("generate_selenium", self._generate_selenium_node)
-        
-        # Define the workflow edges
-        workflow.set_entry_point("generate_feature")
-        workflow.add_edge("generate_feature", "generate_selenium")
-        workflow.add_edge("generate_selenium", END)
-        
-        return workflow.compile()
-    
-    def execute(self, brd_text: str) -> dict:
-        """Execute the full workflow from BRD to Selenium tests.
-        
-        Args:
-            brd_text: Business Requirements Document text
-            
-        Returns:
-            dict with 'feature_file' and 'selenium_test' keys
-        """
-        print("\n🚀 Starting Agentic Automation Workflow...")
-        print("=" * 60)
-        
-        # Initialize state
-        initial_state: AgentState = {
-            "brd_text": brd_text,
-            "feature_file": "",
-            "selenium_test": "",
-            "current_step": "start",
-            "messages": []
-        }
-        
-        # Execute workflow
-        final_state = self.workflow.invoke(initial_state)
-        
-        print("\n✅ Workflow completed successfully!")
-        print("=" * 60)
-        
-        return {
-            "feature_file": final_state["feature_file"],
-            "selenium_test": final_state["selenium_test"]
-        }
-
-
-class ValidatedWorkflow:
-    """Enhanced workflow with validation steps after each generation phase.
-    
-    Uses LangChain agents properly with validation steps between generation phases.
-    Agents are invoked through the workflow, not bypassed with direct prompting.
-    """
-    
-    def __init__(self, use_strong_model: bool = True):
-        # Create agents using official LangChain create_agent
-        self.feature_agent, self.feature_model = create_feature_agent(use_strong_model=use_strong_model)
-        self.selenium_agent, self.selenium_model = create_selenium_agent(use_strong_model=use_strong_model)
         self.workflow = self._build_workflow()
     
     def _generate_feature_node(self, state: AgentState) -> AgentState:
         """Node: Generate feature file from BRD."""
-        print("\n🤖 Feature Agent: Working on feature file...")
+        print("\n🤖 Feature Agent: Generating feature file...")
         
-        # Invoke the LangChain agent
         result = self.feature_agent.invoke({"messages": [{"role": "user", "content": state['brd_text']}]})
-        
-        # Extract the final message content
         if result.get('messages'):
             feature_file = result['messages'][-1].content
         else:
             feature_file = str(result)
-        
-        # Clean up markdown code fences
         feature_file = feature_file.replace('```gherkin', '').replace('```', '').strip()
         
-        return {**state, "feature_file": feature_file}
+        return {**state, "feature_file": feature_file, "current_step": "feature_generated"}
     
-    def _review_feature_node(self, state: AgentState) -> AgentState:
-        """Node: Review and validate feature file."""
-        print("\n🔍 Reviewer: Validating feature file...")
-        # Simple validation
-        has_feature = "Feature:" in state["feature_file"]
-        has_scenario = "Scenario:" in state["feature_file"]
-        status = "✅ Valid" if (has_feature and has_scenario) else "❌ Invalid"
-        print(f"   {status}")
-        return {**state, "current_step": "feature_reviewed"}
+    def _validate_feature_node(self, state: AgentState) -> AgentState:
+        """Node: Validate feature file using direct tool calls."""
+        print("\n🔧 Validating feature file...")
+        
+        # Call tools directly - NO AGENT LOOP
+        syntax_result = validate_feature_syntax.invoke({"feature_content": state['feature_file']})
+        quality_result = analyze_code_quality.invoke({"code": state['feature_file']})
+        
+        # Format validation report
+        validation_report = f"""Feature Validation Results:
+✓ Syntax Check: {syntax_result.get('status', 'unknown')}
+  - {syntax_result.get('message', 'No message')}
+✓ Quality Analysis:
+  - Lines: {quality_result.get('lines', 0)}
+  - Scenarios: {quality_result.get('methods', 0)}
+"""
+        
+        print(f"   {syntax_result.get('message', '')}")
+        
+        return {
+            **state,
+            "validation_results": {"feature": validation_report},
+            "current_step": "feature_validated"
+        }
     
     def _generate_selenium_node(self, state: AgentState) -> AgentState:
-        """Node: Generate Selenium test."""
-        print("\n🤖 Selenium Agent: Creating automation test...")
+        """Node: Generate Cucumber step definitions and runner."""
+        print("\n🤖 Selenium Agent: Generating Cucumber step definitions...")
         
-        # Invoke the LangChain agent
         result = self.selenium_agent.invoke({"messages": [{"role": "user", "content": state['feature_file']}]})
-        
-        # Extract the final message content
         if result.get('messages'):
-            selenium_test = result['messages'][-1].content
+            step_definitions = result['messages'][-1].content
         else:
-            selenium_test = str(result)
+            step_definitions = str(result)
+        step_definitions = step_definitions.replace('```java', '').replace('```', '').strip()
         
-        # Clean up markdown code fences
-        selenium_test = selenium_test.replace('```java', '').replace('```', '').strip()
+        # Generate Cucumber runner class
+        runner_class = self._generate_cucumber_runner(state['feature_file'])
         
-        return {**state, "selenium_test": selenium_test}
+        return {
+            **state,
+            "step_definitions": step_definitions,
+            "runner_class": runner_class,
+            "selenium_test": step_definitions,  # For backward compatibility
+            "current_step": "selenium_generated"
+        }
     
-    def _review_selenium_node(self, state: AgentState) -> AgentState:
-        """Node: Review and enhance Selenium test."""
-        print("\n🔍 Reviewer: Validating Selenium test...")
-        return {**state, "current_step": "automation_reviewed"}
+    def _validate_selenium_node(self, state: AgentState) -> AgentState:
+        """Node: Validate and compile Java test using direct tool calls."""
+        print("\n🔧 Validating Java code...")
+        
+        # Extract class name from Java code
+        import re
+        class_match = re.search(r'class\s+(\w+)', state['selenium_test'])
+        class_name = class_match.group(1) if class_match else "GeneratedTest"
+        
+        # Call tools directly - NO AGENT LOOP
+        deps_result = check_java_dependencies.invoke({"java_code": state['selenium_test']})
+        compile_result = compile_java_code.invoke({"java_code": state['selenium_test'], "class_name": class_name})
+        quality_result = analyze_code_quality.invoke({"code": state['selenium_test']})
+        
+        # Format validation report
+        validation_report = f"""Java Validation Results:
+✓ Dependencies: {deps_result.get('status', 'unknown')}
+  - Missing: {len(deps_result.get('missing_dependencies', []))} imports
+✓ Compilation: {compile_result.get('status', 'unknown')}
+  - {compile_result.get('message', 'No message')}
+✓ Quality:
+  - Lines: {quality_result.get('lines', 0)}
+  - Methods: {quality_result.get('methods', 0)}
+"""
+        
+        print(f"   {compile_result.get('message', '')}")
+        
+        validation_dict = state.get("validation_results", {})
+        validation_dict["selenium"] = validation_report
+        
+        return {
+            **state,
+            "validation_results": validation_dict,
+            "current_step": "selenium_validated"
+        }
+    
+    def _generate_cucumber_runner(self, feature_content: str) -> str:
+        """Generate a Cucumber test runner class.
+        
+        Args:
+            feature_content: Gherkin feature file content
+            
+        Returns:
+            Complete Cucumber runner Java class code
+        """
+        # Extract feature name from first line
+        feature_name = "Test"
+        for line in feature_content.split('\n'):
+            if line.strip().startswith('Feature:'):
+                # Extract feature name and convert to PascalCase
+                name = line.replace('Feature:', '').strip()
+                # Simple conversion: remove special chars and capitalize words
+                feature_name = ''.join(word.capitalize() for word in name.replace('-', ' ').replace('_', ' ').split())
+                break
+        
+        runner_template = f'''import org.junit.runner.RunWith;
+import io.cucumber.junit.Cucumber;
+import io.cucumber.junit.CucumberOptions;
+
+/**
+ * Cucumber Test Runner
+ * Binds feature files to step definitions for BDD execution
+ */
+@RunWith(Cucumber.class)
+@CucumberOptions(
+    features = "src/test/resources/features",
+    glue = {{"stepdefinitions"}},
+    plugin = {{
+        "pretty",
+        "html:target/cucumber-reports/cucumber.html",
+        "json:target/cucumber-reports/cucumber.json",
+        "junit:target/cucumber-reports/cucumber.xml"
+    }},
+    monochrome = true,
+    dryRun = false
+)
+public class {feature_name}Runner {{
+    // This class should remain empty
+    // All test logic is in step definitions
+}}
+'''
+        return runner_template
     
     def _build_workflow(self) -> StateGraph:
-        """Build workflow with review steps."""
+        """Build workflow with tool-enabled validation."""
         workflow = StateGraph(AgentState)
         
         # Add nodes
         workflow.add_node("generate_feature", self._generate_feature_node)
-        workflow.add_node("review_feature", self._review_feature_node)
+        workflow.add_node("validate_feature", self._validate_feature_node)
         workflow.add_node("generate_selenium", self._generate_selenium_node)
-        workflow.add_node("review_selenium", self._review_selenium_node)
+        workflow.add_node("validate_selenium", self._validate_selenium_node)
         
         # Define edges
         workflow.set_entry_point("generate_feature")
-        workflow.add_edge("generate_feature", "review_feature")
-        workflow.add_edge("review_feature", "generate_selenium")
-        workflow.add_edge("generate_selenium", "review_selenium")
-        workflow.add_edge("review_selenium", END)
+        workflow.add_edge("generate_feature", "validate_feature")
+        workflow.add_edge("validate_feature", "generate_selenium")
+        workflow.add_edge("generate_selenium", "validate_selenium")
+        workflow.add_edge("validate_selenium", END)
         
         return workflow.compile()
     
     def execute(self, brd_text: str) -> dict:
-        """Execute the parallel review workflow."""
-        print("\n🚀 Starting Enhanced Agentic Workflow with Reviews...")
+        """Execute the tool-enabled validation workflow."""
+        print("\n🚀 Starting Agentic Automation Workflow with Tool Validation...")
+        print("=" * 60)
+        print("✨ Using TOOLS to validate: compile Java, check syntax, analyze quality")
         print("=" * 60)
         
         initial_state: AgentState = {
             "brd_text": brd_text,
             "feature_file": "",
+            "step_definitions": "",
+            "runner_class": "",
             "selenium_test": "",
             "current_step": "start",
-            "messages": []
+            "messages": [],
+            "validation_results": {}
         }
         
         final_state = self.workflow.invoke(initial_state)
         
-        print("\n✅ Enhanced workflow completed!")
+        print("\n✅ Workflow completed with validation!")
         print("=" * 60)
+        
+        # Print validation summary
+        if final_state.get("validation_results"):
+            print("\n📊 Validation Summary:")
+            print("=" * 60)
+            for key, value in final_state["validation_results"].items():
+                print(f"\n{key.upper()}:")
+                print(value[:300] + "..." if len(str(value)) > 300 else value)
         
         return {
             "feature_file": final_state["feature_file"],
-            "selenium_test": final_state["selenium_test"]
+            "step_definitions": final_state.get("step_definitions", final_state.get("selenium_test", "")),
+            "runner_class": final_state.get("runner_class", ""),
+            "selenium_test": final_state.get("selenium_test", ""),  # For backward compatibility
+            "validation_results": final_state.get("validation_results", {})
         }

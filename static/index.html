@@ -269,20 +269,6 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>Workflow Type:</label>
-                    <div class="radio-group">
-                        <div class="radio-option">
-                            <input type="radio" id="workflowStandard" name="workflow" value="standard" checked>
-                            <label for="workflowStandard" style="margin-bottom: 0;">Standard</label>
-                        </div>
-                        <div class="radio-option">
-                            <input type="radio" id="workflowParallel" name="workflow" value="parallel">
-                            <label for="workflowParallel" style="margin-bottom: 0;">Parallel (with validation)</label>
-                        </div>
-                    </div>
-                </div>
-
                 <button type="submit" class="btn" id="submitBtn">
                     Generate Tests
                 </button>
@@ -342,7 +328,6 @@
             formData.append('file', fileInput.files[0]);
             formData.append('base_name', document.getElementById('baseName').value);
             formData.append('use_strong_model', document.getElementById('useStrongModel').checked);
-            formData.append('use_parallel', document.querySelector('input[name="workflow"]:checked').value === 'parallel');
 
             // Show loading
             status.className = 'status loading';
@@ -364,25 +349,40 @@
                     status.style.display = 'block';
                     
                     const featureFileName = result.files.feature.split('\\').pop().split('/').pop();
-                    const testFileName = result.files.test.split('\\').pop().split('/').pop();
+                    const stepDefFileName = result.files.step_definitions.split('\\').pop().split('/').pop();
+                    const runnerFileName = result.files.runner ? result.files.runner.split('\\').pop().split('/').pop() : null;
+                    
+                    let filesHtml = `
+                        <ul>
+                            <li>Feature: ${featureFileName}</li>
+                            <li>Step Definitions: ${stepDefFileName}</li>`;
+                    if (runnerFileName) {
+                        filesHtml += `<li>Test Runner: ${runnerFileName}</li>`;
+                    }
+                    filesHtml += `</ul>`;
+                    
+                    let downloadButtons = `
+                        <div class="download-buttons">
+                            <a href="/download/test/${featureFileName}" class="download-btn" download>
+                                📥 Feature
+                            </a>
+                            <a href="/download/test/${stepDefFileName}" class="download-btn" download>
+                                📥 Step Definitions
+                            </a>`;
+                    if (runnerFileName) {
+                        downloadButtons += `
+                            <a href="/download/test/${runnerFileName}" class="download-btn" download>
+                                📥 Runner
+                            </a>`;
+                    }
+                    downloadButtons += `</div>`;
                     
                     status.innerHTML = `
                         <div>
                             <strong>✅ Generation Successful!</strong>
                             <p>Generated Files:</p>
-                            <ul>
-                                <li>Feature: ${featureFileName}</li>
-                                <li>Test: ${testFileName}</li>
-                            </ul>
-                            
-                            <div class="download-buttons">
-                                <a href="/download/feature/${featureFileName}" class="download-btn" download>
-                                    📥 Download Feature File
-                                </a>
-                                <a href="/download/test/${testFileName}" class="download-btn" download>
-                                    📥 Download Test File
-                                </a>
-                            </div>
+                            ${filesHtml}
+                            ${downloadButtons}
                             
                             <details style="margin-top: 15px;">
                                 <summary style="cursor: pointer; font-weight: 600;">View Feature File</summary>
@@ -390,11 +390,19 @@
                             </details>
                             
                             <details style="margin-top: 10px;">
-                                <summary style="cursor: pointer; font-weight: 600;">View Test File</summary>
+                                <summary style="cursor: pointer; font-weight: 600;">View Step Definitions</summary>
                                 <div class="result-content">${escapeHtml(result.test_content)}</div>
-                            </details>
-                        </div>
-                    `;
+                            </details>`;
+                    
+                    if (result.runner_content) {
+                        status.innerHTML += `
+                            <details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; font-weight: 600;">View Test Runner</summary>
+                                <div class="result-content">${escapeHtml(result.runner_content)}</div>
+                            </details>`;
+                    }
+                    
+                    status.innerHTML += `</div>`;
                 } else {
                     throw new Error(result.detail || 'Generation failed');
                 }
