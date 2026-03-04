@@ -760,27 +760,61 @@ The generated Cucumber BDD tests can be automatically compiled and executed in y
 
 #### Quick Start
 
+**🚀 NEW: One-Command Full Automation**
+
+```bash
+# Generate tests + Setup Maven project + Resolve dependencies
+python main.py --brd data/brd_sample.txt --base-name AccountOpening --auto-setup-maven
+```
+
+This single command:
+- ✅ Generates Gherkin feature files
+- ✅ Generates Cucumber step definitions
+- ✅ Generates Cucumber test runners
+- ✅ Creates Maven project structure
+- ✅ Copies files to correct locations
+- ✅ Cleans markdown formatting automatically
+- ✅ Resolves all dependencies (Cucumber, Selenium, JUnit)
+- ✅ Compiles tests
+- ✅ Configures VS Code Java classpath
+
+**Then just run:**
+```bash
+cd test-project
+mvn test
+```
+
+**See [MAVEN_SETUP.md](MAVEN_SETUP.md) for complete automation documentation.**
+
+---
+
 **Local execution (Windows):**
 ```powershell
-# Generate Cucumber BDD tests
+# Generate Cucumber BDD tests with automatic Maven setup
+python main.py --brd data/brd_sample.txt --base-name AccountOpening --auto-setup-maven
+
+# OR: Generate without auto-setup then setup manually
 python main.py --brd data/brd_sample.txt --base-name AccountOpening
+python setup_project.py
 
 # Compile and run with Maven
-cd cicd
-mvn clean test
+cd test-project
+mvn test
 ```
 
 **Local execution (Linux/Mac):**
 ```bash
-# Generate Cucumber BDD tests
+# Generate Cucumber BDD tests with automatic Maven setup
+python main.py --brd data/brd_sample.txt --base-name AccountOpening --auto-setup-maven
+
+# OR: Generate without auto-setup then setup manually
 python main.py --brd data/brd_sample.txt --base-name AccountOpening
+python setup_project.py
 
 # Compile and run with Maven
-cd cicd
-mvn clean test
+cd test-project
+mvn test
 ```
-
-#### Running Cucumber Tests
 
 **Prerequisites:**
 1. Organize generated files in Maven structure:

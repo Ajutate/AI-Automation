@@ -4,12 +4,68 @@ This workflow uses LangChain's official create_agent to create proper agents,
 then orchestrates them in a StateGraph workflow with ACTUAL code validation using executable tools.
 """
 
+import re
 from typing import TypedDict, Annotated
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 
 from .agents import create_feature_agent, create_selenium_agent
 from .tools import compile_java_code, validate_feature_syntax, check_java_dependencies, analyze_code_quality
+
+
+def clean_code_block(content: str, language_hint: str = None) -> str:
+    """Remove markdown formatting and explanatory text from code blocks.
+    
+    Args:
+        content: The content that may contain markdown code blocks
+        language_hint: Optional hint for the language (e.g., 'java', 'gherkin')
+    
+    Returns:
+        Clean code without markdown formatting or explanatory text
+    """
+    if not content:
+        return content
+    
+    # Iteratively extract from code blocks (handles nested blocks)
+    max_iterations = 3  # Prevent infinite loops
+    for _ in range(max_iterations):
+        # Find opening backticks (3 or more) with optional language
+        # Can be at start of line (not necessarily start of content)
+        opener_pattern = r'(?:^|\n)(`{3,})(\w+)?\s*\n'
+        opener_match = re.search(opener_pattern, content, re.MULTILINE)
+        
+        if not opener_match:
+            # No code block markers found
+            break
+        
+        num_backticks = len(opener_match.group(1))
+        opener_end = opener_match.end()
+        
+        # Find matching closer (same number of backticks)
+        closer_pattern = r'\n' + '`' * num_backticks + r'(?:\s|$)'
+        closer_match = re.search(closer_pattern, content[opener_end:])
+        
+        if closer_match:
+            # Extract content between opener and closer
+            content = content[opener_end:opener_end + closer_match.start()].strip()
+        else:
+            # No matching closer, take everything after opener
+            content = content[opener_end:].strip()
+            break
+    
+    # Fallback: simple removal of any remaining stray backticks
+    content = content.replace('```java', '').replace('```gherkin', '').replace('```', '').strip()
+    
+    # Remove trailing explanatory sections (### headers, etc.)
+    explanatory_patterns = [
+        r'\n\s*#{1,6}\s+\w+.*$',  # Markdown headers like ### Explanation:
+        r'\n\s*(?:Note|Explanation|This code|This setup|Important):.*$',  # Common starters
+    ]
+    
+    for pattern in explanatory_patterns:
+        content = re.sub(pattern, '', content, flags=re.DOTALL | re.IGNORECASE)
+    
+    return content.strip()
 
 
 class AgentState(TypedDict):
@@ -36,10 +92,11 @@ class AutomationWorkflow:
     This makes it a truly autonomous system that validates its own outputs.
     """
     
-    def __init__(self, use_strong_model: bool = True):
+    def __init__(self, use_strong_model: bool = True, auto_setup_maven: bool = False):
         # Create generation agents
         self.feature_agent, self.feature_model = create_feature_agent(use_strong_model=use_strong_model)
         self.selenium_agent, self.selenium_model = create_selenium_agent(use_strong_model=use_strong_model)
+        self.auto_setup_maven = auto_setup_maven
         
         self.workflow = self._build_workflow()
     
@@ -52,7 +109,7 @@ class AutomationWorkflow:
             feature_file = result['messages'][-1].content
         else:
             feature_file = str(result)
-        feature_file = feature_file.replace('```gherkin', '').replace('```', '').strip()
+        feature_file = clean_code_block(feature_file, 'gherkin')
         
         return {**state, "feature_file": feature_file, "current_step": "feature_generated"}
     
@@ -90,7 +147,7 @@ class AutomationWorkflow:
             step_definitions = result['messages'][-1].content
         else:
             step_definitions = str(result)
-        step_definitions = step_definitions.replace('```java', '').replace('```', '').strip()
+        step_definitions = clean_code_block(step_definitions, 'java')
         
         # Generate Cucumber runner class
         runner_class = self._generate_cucumber_runner(state['feature_file'])
@@ -236,10 +293,27 @@ public class {feature_name}Runner {{
                 print(f"\n{key.upper()}:")
                 print(value[:300] + "..." if len(str(value)) > 300 else value)
         
-        return {
+        result = {
             "feature_file": final_state["feature_file"],
             "step_definitions": final_state.get("step_definitions", final_state.get("selenium_test", "")),
             "runner_class": final_state.get("runner_class", ""),
             "selenium_test": final_state.get("selenium_test", ""),  # For backward compatibility
             "validation_results": final_state.get("validation_results", {})
         }
+        
+        # Auto-setup Maven project if enabled
+        if self.auto_setup_maven:
+            try:
+                from .maven_setup import MavenProjectSetup
+                print("\n" + "="*60)
+                print("🔧 Running automatic Maven project setup...")
+                print("="*60)
+                setup = MavenProjectSetup()
+                setup.run_full_setup()
+                result["maven_setup_complete"] = True
+            except Exception as e:
+                print(f"\n⚠️  Maven setup failed: {e}")
+                print("   You can run 'python setup_project.py' manually")
+                result["maven_setup_complete"] = False
+        
+        return result

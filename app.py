@@ -64,7 +64,8 @@ async def root():
 async def generate_tests(
     file: UploadFile = File(...),
     base_name: str = Form(...),
-    use_strong_model: bool = Form(False)
+    use_strong_model: bool = Form(False),
+    auto_setup_maven: bool = Form(False)
 ):
     """Generate feature and test files from uploaded BRD"""
     try:
@@ -80,7 +81,10 @@ async def generate_tests(
         brd_content = read_document(file_path)
         
         # Initialize workflow with tool validation
-        workflow = AutomationWorkflow(use_strong_model=use_strong_model)
+        workflow = AutomationWorkflow(
+            use_strong_model=use_strong_model,
+            auto_setup_maven=False  # Maven handled after save_outputs below
+        )
         
         # Run workflow
         result = workflow.execute(brd_content)
@@ -96,28 +100,82 @@ async def generate_tests(
         
         # Clean up temp file
         os.remove(file_path)
-        
+
+        # Create a brand-new project folder for this submission (never touch older ones)
+        import re as _re
+        safe_name = _re.sub(r'[^\w\-]', '-', base_name).strip('-') or 'test'
+        project_name = f"test-project-{safe_name}"
+        from ai_automation.maven_setup import MavenProjectSetup
+        setup = MavenProjectSetup(project_name=project_name)
+        setup.setup_project_structure()
+        setup.copy_specific_files(feature_path, step_def_path, runner_path if runner_path else None)
+
+        maven_setup_complete = False
+        if auto_setup_maven:
+            deps_resolved = setup.resolve_dependencies()
+            if deps_resolved:
+                setup.compile_tests()
+            setup.configure_vscode_classpath()
+            maven_setup_complete = True
+
         response_files = {
             "feature": feature_path,
             "step_definitions": step_def_path
         }
         if runner_path:
             response_files["runner"] = runner_path
-        
-        return JSONResponse({
+
+        response_data = {
             "status": "success",
             "message": "Files generated successfully",
             "files": response_files,
+            "project_dir": project_name,
             "feature_content": result["feature_file"],
             "test_content": result.get("step_definitions", result.get("selenium_test", "")),
             "runner_content": result.get("runner_class", "")
-        })
+        }
+
+        if auto_setup_maven:
+            response_data["maven_setup"] = maven_setup_complete
+            response_data["message"] += " + Maven project configured" if maven_setup_complete else " (Maven setup failed)"
+
+        return JSONResponse(response_data)
         
     except Exception as e:
         # Clean up on error
         if os.path.exists(file_path):
             os.remove(file_path)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/setup-maven")
+async def setup_maven_project():
+    """Setup Maven project structure and resolve dependencies"""
+    try:
+        from ai_automation.maven_setup import MavenProjectSetup
+        
+        setup = MavenProjectSetup()
+        success = setup.run_full_setup()
+        
+        if success:
+            return JSONResponse({
+                "status": "success",
+                "message": "Maven project setup completed successfully",
+                "project_dir": str(setup.project_dir),
+                "instructions": [
+                    "Reload VS Code window (Ctrl+Shift+P → 'Reload Window')",
+                    "Run: cd test-project && mvn test"
+                ]
+            })
+        else:
+            return JSONResponse({
+                "status": "partial",
+                "message": "Maven project setup completed with warnings",
+                "note": "Check console output for details"
+            })
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Maven setup failed: {str(e)}")
 
 
 @app.get("/download/{file_type}/{filename}")

@@ -269,6 +269,14 @@
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label>Project Setup:</label>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="autoSetupMaven" checked>
+                        <label for="autoSetupMaven" style="margin-bottom: 0;">Auto-setup Maven project & resolve dependencies</label>
+                    </div>
+                </div>
+
                 <button type="submit" class="btn" id="submitBtn">
                     Generate Tests
                 </button>
@@ -328,6 +336,7 @@
             formData.append('file', fileInput.files[0]);
             formData.append('base_name', document.getElementById('baseName').value);
             formData.append('use_strong_model', document.getElementById('useStrongModel').checked);
+            formData.append('auto_setup_maven', document.getElementById('autoSetupMaven').checked);
 
             // Show loading
             status.className = 'status loading';

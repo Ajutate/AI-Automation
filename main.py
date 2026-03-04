@@ -23,6 +23,8 @@ def main() -> None:
     parser.add_argument("--brd", required=True, help="Path to BRD text file")
     parser.add_argument("--base-name", default="GeneratedFeature", help="Base name for output files")
     parser.add_argument("--use-strong-model", action="store_true", help="Use stronger model for generation")
+    parser.add_argument("--auto-setup-maven", action="store_true", 
+                       help="Automatically setup Maven project and resolve dependencies after generation")
     args = parser.parse_args()
 
     # Read BRD
@@ -31,7 +33,10 @@ def main() -> None:
     print(f"✓ BRD loaded ({len(brd_text)} characters)")
 
     # Execute workflow with tool validation
-    workflow = AutomationWorkflow(use_strong_model=args.use_strong_model)
+    workflow = AutomationWorkflow(
+        use_strong_model=args.use_strong_model,
+        auto_setup_maven=args.auto_setup_maven
+    )
     results = workflow.execute(brd_text)
 
     # Save outputs
