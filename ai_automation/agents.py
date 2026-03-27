@@ -1,12 +1,12 @@
 """Agent definitions using langchain.agents.create_agent.
 
-Uses ChatOllama from langchain_community as the model — no custom wrapper classes.
+Uses ChatOpenAI (pointing to LiteLLM proxy) as the model — no custom wrapper classes.
 Requires langchain>=1.0.1 and langchain-core>=1.2.14.
 """
 
 from typing import List, Tuple
 from langchain.agents import create_agent
-from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 
 from .config import Config
 from .tools import (
@@ -17,11 +17,12 @@ from .tools import (
 )
 
 
-def _make_llm(model_name: str, cfg: 'Config') -> ChatOllama:
-    """Instantiate ChatOllama with project config."""
-    return ChatOllama(
-        model=model_name,
-        base_url=cfg.ollama_base_url,
+def _make_llm(model_name: str, cfg: 'Config') -> ChatOpenAI:
+    """Instantiate ChatOpenAI pointing to the local LiteLLM proxy."""
+    return ChatOpenAI(
+        model_name=model_name,
+        api_key=cfg.litellm_api_key,
+        base_url=cfg.litellm_base_url,
         temperature=cfg.temperature,
     )
 
@@ -68,6 +69,11 @@ use Scenario Outline with an Examples table. Example:
 RULE 3 - NEVER write steps like "the user enters a valid email and password"
 without providing the actual values in a DataTable or Scenario Outline. The step
 must carry the data — do not leave data undefined.
+
+RULE 4 - ALWAYS detect intents from latest customer email ONLY.
+When the input contains a thread or history of multiple customer emails,
+extract requirements and intents exclusively from the most recent email.
+Ignore all prior emails in the thread.
 
 Generate:
 - Feature description

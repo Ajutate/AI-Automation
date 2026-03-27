@@ -145,7 +145,15 @@ async def generate_tests(
         # Clean up on error
         if os.path.exists(file_path):
             os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Detect LiteLLM / LLM backend connection failures
+        error_str = str(e)
+        if "Connection error" in error_str or "ConnectionRefused" in error_str or "10061" in error_str or "APIConnectionError" in error_str:
+            raise HTTPException(
+                status_code=503,
+                detail="LiteLLM server is not reachable at http://localhost:4000. "
+                       "Please start it with: litellm --model ollama/qwen3 --port 4000"
+            )
+        raise HTTPException(status_code=500, detail=error_str)
 
 
 @app.post("/setup-maven")

@@ -1,4 +1,4 @@
-"""Ollama client for text generation via local API."""
+"""LiteLLM client for text generation via OpenAI-compatible API."""
 
 from typing import Optional
 import requests
@@ -13,30 +13,27 @@ def generate_text(prompt: str, model: Optional[str] = None, temperature: Optiona
                   max_tokens: Optional[int] = None) -> str:
     cfg = Config()
     model_name = model or cfg.primary_model
-    
-    logger.info(f"🔄 Calling Ollama API - Model: {model_name}, Prompt length: {len(prompt)} chars")
+
+    logger.info(f"🔄 Calling LiteLLM API - Model: {model_name}, Prompt length: {len(prompt)} chars")
     print(f"   📡 LLM Call: {model_name} (prompt: {len(prompt)} chars)")
-    
+
     payload = {
         "model": model_name,
-        "prompt": prompt,
+        "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature if temperature is not None else cfg.temperature,
-        "stream": False,
-        "options": {
-            "num_predict": max_tokens if max_tokens is not None else cfg.max_tokens
-        }
+        "max_tokens": max_tokens if max_tokens is not None else cfg.max_tokens,
     }
 
     response = requests.post(
-        f"{cfg.ollama_base_url}/api/generate",
+        f"{cfg.litellm_base_url}/v1/chat/completions",
+        headers={"Authorization": f"Bearer {cfg.litellm_api_key}"},
         json=payload,
-        timeout=cfg.request_timeout_s
+        timeout=cfg.request_timeout_s,
     )
     response.raise_for_status()
-    data = response.json()
-    result = data.get("response", "").strip()
-    
+    result = response.json()["choices"][0]["message"]["content"].strip()
+
     print(f"   ✅ LLM Response: {len(result)} chars generated")
-    logger.info(f"✅ Ollama response received - Generated: {len(result)} chars")
-    
+    logger.info(f"✅ LiteLLM response received - Generated: {len(result)} chars")
+
     return result
