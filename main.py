@@ -1,10 +1,16 @@
 """CLI for BRD -> Feature -> Java test generation using LangGraph."""
 
 import argparse
+import logging
 from pathlib import Path
 
 from ai_automation.workflow import AutomationWorkflow
 from ai_automation.generator import save_outputs
+from ai_automation.logging_config import setup_logging
+
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 def read_brd(path: str) -> str:
@@ -26,6 +32,7 @@ def main() -> None:
     parser.add_argument("--auto-setup-maven", action="store_true", 
                        help="Automatically setup Maven project and resolve dependencies after generation")
     args = parser.parse_args()
+    logger.info("CLI generation started for BRD '%s' with base name '%s'", args.brd, args.base_name)
 
     # Read BRD
     print(f"\n📄 Reading BRD from: {args.brd}")
@@ -57,6 +64,7 @@ def main() -> None:
         print(f"   • Test Runner: {runner_path}")
     print("=" * 60)
     print("\n✨ Generation complete!\n")
+    logger.info("CLI generation finished for base name '%s'", args.base_name)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 """FastAPI Web Application for BRD to Test Automation"""
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -13,6 +14,11 @@ import PyPDF2
 
 from ai_automation.workflow import AutomationWorkflow
 from ai_automation.config import Config
+from ai_automation.logging_config import setup_logging
+
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(title="BRD to Test Automation")
@@ -68,7 +74,9 @@ async def generate_tests(
     auto_setup_maven: bool = Form(False)
 ):
     """Generate feature and test files from uploaded BRD"""
+    file_path = ""
     try:
+        logger.info("Generating tests for uploaded file '%s' using base name '%s'", file.filename, base_name)
         # Create temp directory for uploads
         os.makedirs("temp", exist_ok=True)
         
@@ -145,13 +153,15 @@ async def generate_tests(
         # Clean up on error
         if os.path.exists(file_path):
             os.remove(file_path)
+        logger.exception("Failed to generate tests for '%s'", base_name)
         # Detect LiteLLM / LLM backend connection failures
         error_str = str(e)
         if "Connection error" in error_str or "ConnectionRefused" in error_str or "10061" in error_str or "APIConnectionError" in error_str:
+            cfg = Config()
             raise HTTPException(
                 status_code=503,
-                detail="LiteLLM server is not reachable at http://localhost:4000. "
-                       "Please start it with: litellm --model ollama/qwen3 --port 4000"
+                detail=f"LiteLLM server is not reachable at {cfg.litellm_base_url}. "
+                       f"Please start it with: litellm --model ollama/{cfg.primary_model} --port 4000"
             )
         raise HTTPException(status_code=500, detail=error_str)
 
@@ -215,7 +225,9 @@ if __name__ == "__main__":
     os.makedirs("static", exist_ok=True)
     os.makedirs("temp", exist_ok=True)
     
+    cfg = Config()
+    logger.info("Starting FastAPI server on %s:%s", cfg.app_host, cfg.app_port)
     print("Starting FastAPI server...")
-    print("Open http://localhost:8000 in your browser")
-    
-    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+    print(f"Open http://localhost:{cfg.app_port} in your browser")
+
+    uvicorn.run(app, host=cfg.app_host, port=cfg.app_port, log_level=cfg.log_level.lower(), log_config=None)
